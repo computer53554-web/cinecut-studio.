@@ -18,6 +18,10 @@ import {
   Volume2,
   Subtitles,
   Zap,
+  LayoutTemplate,
+  Smartphone,
+  Tv,
+  Film,
 } from 'lucide-react';
 import { FilterPreset, MediaAsset, TextAnimation, TransitionType } from '../types/editor';
 import { BUILTIN_SOUNDTRACKS, DEFAULT_SAMPLE_MEDIA, FILTER_PRESETS, STICKER_CATALOG, StickerItem } from '../utils/assetsData';
@@ -39,9 +43,10 @@ interface MediaLibraryProps {
   onApplyFilterToSelected?: (preset: FilterPreset) => void;
   onApplyTransitionToSelected?: (type: TransitionType) => void;
   onOpenAutoCaptions?: () => void;
+  onLoadTemplate?: (templateKey: 'neon' | 'lofi' | 'vlog' | 'blank') => void;
 }
 
-type TabKey = 'media' | 'music' | 'stock' | 'text' | 'stickers' | 'filters' | 'transitions';
+type TabKey = 'media' | 'templates' | 'music' | 'stock' | 'text' | 'stickers' | 'filters' | 'transitions';
 type StockSubTab = 'music' | 'sfx' | 'templates';
 
 export const MediaLibrary: React.FC<MediaLibraryProps> = ({
@@ -51,9 +56,11 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
   onApplyFilterToSelected,
   onApplyTransitionToSelected,
   onOpenAutoCaptions,
+  onLoadTemplate,
 }) => {
   const [activeTab, setActiveTab] = useState<TabKey>('media');
   const [stockSubTab, setStockSubTab] = useState<StockSubTab>('music');
+  const [templateFilter, setTemplateFilter] = useState<'all' | 'reels' | 'cinema' | 'intro' | 'typography'>('all');
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [stickerFilter, setStickerFilter] = useState<string>('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -122,7 +129,8 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     { key: 'media', label: 'Media', icon: <FolderPlus className="w-3.5 h-3.5" /> },
-    { key: 'music', label: 'Music', icon: <Music className="w-3.5 h-3.5" /> },
+    { key: 'templates', label: 'Templates', icon: <LayoutTemplate className="w-3.5 h-3.5" /> },
+    { key: 'music', label: 'Audio', icon: <Music className="w-3.5 h-3.5" /> },
     { key: 'stock', label: 'Stock', icon: <Disc3 className="w-3.5 h-3.5" /> },
     { key: 'text', label: 'Text', icon: <Type className="w-3.5 h-3.5" /> },
     { key: 'stickers', label: 'Stickers', icon: <Smile className="w-3.5 h-3.5" /> },
@@ -132,23 +140,23 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
 
   return (
     <div className="w-72 bg-[#0d1118] border-r border-[#1a2230] flex flex-col h-full shrink-0 select-none">
-      {/* Top Tab Bar */}
-      <div className="grid grid-cols-7 border-b border-[#1a2230] bg-[#090d13]">
+      {/* Top Tab Bar (scrollable horizontally if needed) */}
+      <div className="grid grid-cols-4 sm:grid-cols-8 border-b border-[#1a2230] bg-[#090d13]">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             title={tab.label}
-            className={`py-2.5 flex flex-col items-center justify-center gap-1 transition-colors relative ${
+            className={`py-2 flex flex-col items-center justify-center gap-0.5 transition-colors relative ${
               activeTab === tab.key
                 ? 'text-sky-400 bg-[#0e141f]'
                 : 'text-slate-500 hover:text-slate-300 hover:bg-[#0c1017]'
             }`}
           >
             {tab.icon}
-            <span className="text-[9px] font-medium leading-none">{tab.label}</span>
+            <span className="text-[8.5px] font-medium leading-none truncate max-w-[34px]">{tab.label}</span>
             {activeTab === tab.key && (
-              <div className="absolute bottom-0 left-1 right-1 h-0.5 bg-sky-400 rounded-t" />
+              <div className="absolute bottom-0 left-0.5 right-0.5 h-0.5 bg-sky-400 rounded-t" />
             )}
           </button>
         ))}
@@ -175,6 +183,283 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
 
       {/* Tab Contents */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {/* ================= PRE-DESIGNED TEMPLATES TAB ================= */}
+        {activeTab === 'templates' && (
+          <div className="space-y-3">
+            {/* Filter pills */}
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'reels', label: 'TikTok / Reels' },
+                { id: 'cinema', label: 'Cinema 16:9' },
+                { id: 'intro', label: 'Intro / Outro' },
+                { id: 'typography', label: 'Typography' },
+              ].map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setTemplateFilter(cat.id as any)}
+                  className={`px-2.5 py-1 rounded capitalize font-medium text-[10px] whitespace-nowrap transition-colors ${
+                    templateFilter === cat.id
+                      ? 'bg-sky-500 text-white font-bold'
+                      : 'bg-[#141923] text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Template Cards */}
+            <div className="space-y-2.5">
+              {[
+                // TikTok & Reels (9:16)
+                {
+                  id: 'tpl-neon-reels',
+                  name: 'Cyberpunk Neon Beat',
+                  category: 'reels',
+                  format: '9:16',
+                  tag: 'TikTok / Reels',
+                  description: 'High-contrast neon grade with fast cuts and synth drop',
+                  previewBg: 'from-fuchsia-950 via-purple-950 to-sky-950',
+                  titleText: 'NEON VELOCITY ⚡',
+                  titleColor: '#38bdf8',
+                  actionType: 'load_neon' as const,
+                },
+                {
+                  id: 'tpl-viral-pov',
+                  name: 'Viral Bouncing POV Short',
+                  category: 'reels',
+                  format: '9:16',
+                  tag: 'Viral Short',
+                  description: 'Yellow attention-grabber header tag with spring bounce animation',
+                  previewBg: 'from-amber-950 via-rose-950 to-neutral-950',
+                  titleText: 'POV: YOU WON’T BELIEVE THIS',
+                  titleColor: '#fef08a',
+                  actionType: 'insert_text' as const,
+                  textData: {
+                    text: 'POV: YOU WON’T BELIEVE THIS 😱',
+                    animation: 'bounce' as TextAnimation,
+                    color: '#FEF08A',
+                    bg: 'rgba(0,0,0,0.85)',
+                    font: 'Plus Jakarta Sans',
+                    strokeColor: '#78350F',
+                  },
+                },
+                {
+                  id: 'tpl-street-cuts',
+                  name: 'Street Style Fast Cuts',
+                  category: 'reels',
+                  format: '9:16',
+                  tag: 'Fashion & Urban',
+                  description: 'Glitch cuts with chromatic aberration and electronic drop',
+                  previewBg: 'from-rose-950 via-red-900 to-black',
+                  titleText: 'SUMMER DROP // 2026',
+                  titleColor: '#ffffff',
+                  actionType: 'insert_text' as const,
+                  textData: {
+                    text: 'SUMMER DROP // 2026 🔥',
+                    animation: 'glitch' as TextAnimation,
+                    color: '#FFFFFF',
+                    bg: '#DC2626',
+                    font: 'JetBrains Mono',
+                  },
+                },
+                // YouTube & 4K Cinema (16:9)
+                {
+                  id: 'tpl-epic-cinema',
+                  name: '4K Nature Cinematic Story',
+                  category: 'cinema',
+                  format: '16:9',
+                  tag: 'Film / 16:9',
+                  description: 'Widescreen teal & orange grade with letterbox and atmospheric strings',
+                  previewBg: 'from-teal-950 via-slate-900 to-amber-950',
+                  titleText: 'INTO THE WILDERNESS',
+                  titleColor: '#fed7aa',
+                  actionType: 'load_vlog' as const,
+                },
+                {
+                  id: 'tpl-minimal-vlog',
+                  name: 'Minimalist Coffee Vlog',
+                  category: 'cinema',
+                  format: '16:9',
+                  tag: 'Documentary',
+                  description: 'Warm aesthetic, subtle lower-third label, and calming lofi music',
+                  previewBg: 'from-stone-900 via-amber-950/40 to-stone-950',
+                  titleText: 'MORNING ROUTINE · 07:00 AM',
+                  titleColor: '#fde68a',
+                  actionType: 'load_lofi' as const,
+                },
+                // Intro & Outro Presets
+                {
+                  id: 'tpl-glitch-intro',
+                  name: 'Glitch Opener Stinger',
+                  category: 'intro',
+                  format: '3.0s',
+                  tag: 'Intro Stinger',
+                  description: 'High-impact 3s digital matrix opener with laser audio & glitch text',
+                  previewBg: 'from-indigo-950 via-cyan-950 to-black',
+                  titleText: 'INITIALIZING SYSTEM...',
+                  titleColor: '#00ffcc',
+                  actionType: 'insert_text' as const,
+                  textData: {
+                    text: 'SYSTEM // ONLINE',
+                    animation: 'glitch' as TextAnimation,
+                    color: '#00FFCC',
+                    bg: '#0F172A',
+                    font: 'JetBrains Mono',
+                  },
+                },
+                {
+                  id: 'tpl-clean-fade-intro',
+                  name: 'Clean Title Fade Opener',
+                  category: 'intro',
+                  format: '4.0s',
+                  tag: 'Intro Preset',
+                  description: 'Smooth fade from darkness with elegant modern typography',
+                  previewBg: 'from-slate-950 via-slate-900 to-black',
+                  titleText: 'A CINECUT ORIGINAL',
+                  titleColor: '#e2e8f0',
+                  actionType: 'insert_text' as const,
+                  textData: {
+                    text: 'A CINECUT ORIGINAL',
+                    animation: 'slideUp' as TextAnimation,
+                    color: '#FFFFFF',
+                    bg: 'rgba(0,0,0,0.6)',
+                    font: 'Plus Jakarta Sans',
+                  },
+                },
+                {
+                  id: 'tpl-outro-subscribe',
+                  name: 'Creator Outro & CTA Card',
+                  category: 'intro',
+                  format: '5.0s',
+                  tag: 'Outro CTA',
+                  description: 'End-screen card with subscribe banner and bell icon pulse',
+                  previewBg: 'from-rose-950 via-purple-950 to-slate-950',
+                  titleText: 'THANKS FOR WATCHING 🔔',
+                  titleColor: '#f43f5e',
+                  actionType: 'insert_text' as const,
+                  textData: {
+                    text: 'THANKS FOR WATCHING! LIKE & SUB 🔔',
+                    animation: 'pulse' as TextAnimation,
+                    color: '#FFFFFF',
+                    bg: '#E11D48',
+                    font: 'Plus Jakarta Sans',
+                  },
+                },
+                // Typography Layouts
+                {
+                  id: 'tpl-typo-headline',
+                  name: 'Animated Headline Banner',
+                  category: 'typography',
+                  format: 'Text Preset',
+                  tag: 'Title Hook',
+                  description: 'High-contrast headline banner designed for immediate viewer retention',
+                  previewBg: 'from-yellow-950 to-black',
+                  titleText: 'DON’T MISS THIS TRICK',
+                  titleColor: '#facc15',
+                  actionType: 'insert_text' as const,
+                  textData: {
+                    text: 'DON’T MISS THIS TRICK 💡',
+                    animation: 'bounce' as TextAnimation,
+                    color: '#FACC15',
+                    bg: 'rgba(0,0,0,0.85)',
+                    font: 'Plus Jakarta Sans',
+                  },
+                },
+                {
+                  id: 'tpl-typo-lowerthird',
+                  name: 'Speaker Lower Third Tag',
+                  category: 'typography',
+                  format: 'Lower Third',
+                  tag: 'Speaker / Info',
+                  description: 'Subtle speaker name tag with clean slide-in animation',
+                  previewBg: 'from-sky-950 to-slate-900',
+                  titleText: 'ALEX RIVERS · DIRECTOR',
+                  titleColor: '#38bdf8',
+                  actionType: 'insert_text' as const,
+                  textData: {
+                    text: 'ALEX RIVERS · DIRECTOR',
+                    animation: 'slideUp' as TextAnimation,
+                    color: '#38BDF8',
+                    bg: 'rgba(15, 23, 42, 0.9)',
+                    font: 'Plus Jakarta Sans',
+                  },
+                },
+              ]
+                .filter((tpl) => templateFilter === 'all' || tpl.category === templateFilter)
+                .map((tpl) => (
+                  <div
+                    key={tpl.id}
+                    className="p-3 rounded-xl bg-[#121824] border border-[#1f283a] hover:border-sky-500/50 transition-all flex flex-col gap-2 group"
+                  >
+                    {/* Visual Card Banner */}
+                    <div
+                      className={`h-16 rounded-lg bg-gradient-to-r ${tpl.previewBg} border border-white/10 flex items-center justify-center px-3 relative overflow-hidden`}
+                    >
+                      <span
+                        style={{ color: tpl.titleColor }}
+                        className="text-xs font-black tracking-wider uppercase drop-shadow-md text-center line-clamp-1"
+                      >
+                        {tpl.titleText}
+                      </span>
+                      <span className="absolute top-1 right-1 px-1.5 py-0.2 rounded bg-black/70 text-[9px] font-mono text-slate-300">
+                        {tpl.format}
+                      </span>
+                    </div>
+
+                    {/* Metadata & Actions */}
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white group-hover:text-sky-300 truncate">
+                          {tpl.name}
+                        </span>
+                        <span className="text-[9px] text-sky-400 font-semibold px-1 rounded bg-sky-950/60">
+                          {tpl.tag}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">
+                        {tpl.description}
+                      </p>
+                    </div>
+
+                    {/* Action button */}
+                    <div className="flex items-center gap-1.5 pt-1">
+                      {tpl.actionType === 'load_neon' || tpl.actionType === 'load_vlog' || tpl.actionType === 'load_lofi' ? (
+                        <button
+                          onClick={() => {
+                            if (onLoadTemplate) {
+                              const key = tpl.actionType === 'load_neon' ? 'neon' : tpl.actionType === 'load_vlog' ? 'vlog' : 'lofi';
+                              onLoadTemplate(key);
+                            }
+                          }}
+                          className="flex-1 py-1 px-2.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-white font-semibold text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+                        >
+                          <LayoutTemplate className="w-3 h-3" />
+                          <span>Apply Full Format</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            if (tpl.textData) {
+                              onAddClipToTimeline({
+                                type: 'text',
+                                textPreset: tpl.textData,
+                              });
+                            }
+                          }}
+                          className="flex-1 py-1 px-2.5 rounded-lg bg-[#182132] hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold text-[11px] flex items-center justify-center gap-1.5 transition-colors"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Insert to Timeline</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
         {/* ================= STOCK MEDIA LIBRARY TAB ================= */}
         {activeTab === 'stock' && (
           <div className="space-y-3">

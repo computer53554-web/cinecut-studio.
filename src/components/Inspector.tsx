@@ -20,6 +20,7 @@ import {
   ChevronRight,
   ScissorsLineDashed,
   Wand2,
+  RefreshCw,
 } from 'lucide-react';
 import { Clip, FilterPreset, Keyframe, SmartCutoutMode, TextAnimation, TransitionType } from '../types/editor';
 import { FILTER_PRESETS } from '../utils/assetsData';
@@ -32,6 +33,7 @@ interface InspectorProps {
   onDuplicateClip: (clipId: string) => void;
   onSplitClipAtPlayhead?: () => void;
   onSeek?: (time: number) => void;
+  onOpenReplaceClip?: () => void;
 }
 
 export const Inspector: React.FC<InspectorProps> = ({
@@ -42,6 +44,7 @@ export const Inspector: React.FC<InspectorProps> = ({
   onDeleteClip,
   onDuplicateClip,
   onSplitClipAtPlayhead,
+  onOpenReplaceClip,
 }) => {
   if (!selectedClip) {
     return (
@@ -217,6 +220,15 @@ export const Inspector: React.FC<InspectorProps> = ({
         </div>
 
         <div className="flex items-center gap-1">
+          {onOpenReplaceClip && (selectedClip.type === 'video' || selectedClip.type === 'image') && (
+            <button
+              onClick={onOpenReplaceClip}
+              title="Replace Media Clip (Preserves timing, cuts & effects)"
+              className="p-1.5 rounded bg-[#161c27] hover:bg-sky-500/20 text-slate-400 hover:text-sky-300 transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          )}
           {onSplitClipAtPlayhead && (
             <button
               onClick={onSplitClipAtPlayhead}

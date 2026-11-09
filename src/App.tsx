@@ -13,12 +13,22 @@ import { Timeline } from './components/Timeline';
 import { ExportModal } from './components/ExportModal';
 import { ShortcutsModal } from './components/ShortcutsModal';
 import { AutoCaptionsModal } from './components/AutoCaptionsModal';
+import { SplashScreen } from './components/SplashScreen';
+import { DirectUploadHome } from './components/DirectUploadHome';
+import { MobileEditorView } from './components/MobileEditorView';
+import { ReplaceMediaModal } from './components/ReplaceMediaModal';
 
 export default function App() {
   const defaultProj = createDefaultProject();
   const [projectSettings, setProjectSettings] = useState<ProjectSettings>(defaultProj.settings);
   const [tracks, setTracks] = useState<Track[]>(defaultProj.tracks);
   const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>(DEFAULT_SAMPLE_MEDIA);
+
+  // Splash & Mobile-first workflow state
+  const [showSplash, setShowSplash] = useState<boolean>(true);
+  const [currentView, setCurrentView] = useState<'home' | 'editor'>('home');
+  const [layoutMode, setLayoutMode] = useState<'desktop' | 'mobile'>('desktop');
+  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(false);
 
   // Playback state
   const [currentTime, setCurrentTime] = useState<number>(0);
@@ -30,10 +40,24 @@ export default function App() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isAutoCaptionsOpen, setIsAutoCaptionsOpen] = useState(false);
+  const [isReplaceModalOpen, setIsReplaceModalOpen] = useState(false);
+  const [replaceTargetClip, setReplaceTargetClip] = useState<Clip | null>(null);
 
   // Undo / Redo history
   const [history, setHistory] = useState<Track[][]>([defaultProj.tracks]);
   const [historyIndex, setHistoryIndex] = useState<number>(0);
+
+  // Detect mobile viewport automatically on mount & resize
+  useEffect(() => {
+    const handleResize = () => {
+      const isMobile = window.innerWidth < 1024;
+      setIsMobileScreen(isMobile);
+      setLayoutMode(isMobile ? 'mobile' : 'desktop');
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // References for playback loop
   const animFrameRef = useRef<number | null>(null);
@@ -602,6 +626,338 @@ export default function App() {
     );
   };
 
+  // Direct upload from DirectUploadHome screen
+  const handleUploadFilesFromHome = (files: FileList) => {
+    const newClips: Clip[] = [];
+    const newAssets: MediaAsset[] = [];
+    let startOffset = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const url = URL.createObjectURL(file);
+      const isVideo = file.type.startsWith('video');
+      const isAudio = file.type.startsWith('audio');
+      const isImage = file.type.startsWith('image');
+      const assetType = isVideo ? 'video' : isAudio ? 'audio' : 'image';
+
+      const assetId = `asset-upload-${Date.now()}-${i}`;
+      const asset: MediaAsset = {
+        id: assetId,
+        name: file.name.replace(/\.[^/.]+$/, ''),
+        type: assetType,
+        url,
+        thumbnail: url,
+        duration: isAudio ? 20 : isImage ? 5 : 8,
+      };
+      newAssets.push(asset);
+
+      if (assetType === 'video' || assetType === 'image') {
+        newClips.push({
+          id: `clip-${Date.now()}-${i}`,
+          trackId: 'track-video-1',
+          name: asset.name,
+          type: assetType,
+          mediaAssetId: asset.id,
+          url: asset.url,
+          start: startOffset,
+          duration: asset.duration,
+          sourceStart: 0,
+          speed: 1.0,
+          volume: 1.0,
+          fadeIn: 0.2,
+          fadeOut: 0.2,
+          muted: false,
+          transform: {
+            x: 0,
+            y: 0,
+            scale: 1.0,
+            rotation: 0,
+            opacity: 1.0,
+            flipH: false,
+            flipV: false,
+          },
+          filters: {
+            brightness: 0,
+            contrast: 0,
+            saturation: 0,
+            temperature: 0,
+            vignette: 0,
+            blur: 0,
+            sepia: 0,
+            preset: 'none',
+          },
+          transitionIn: {
+            type: 'none',
+            duration: 0,
+          },
+        });
+        startOffset += asset.duration + 0.1;
+      } else if (assetType === 'audio') {
+        const buf = audioEngine.createSynthTrack('lofi', 20);
+        audioEngine.setBuffer(asset.id, buf);
+
+        newClips.push({
+          id: `clip-audio-${Date.now()}-${i}`,
+          trackId: 'track-audio-1',
+          name: asset.name,
+          type: 'audio',
+          mediaAssetId: asset.id,
+          start: 0,
+          duration: asset.duration,
+          sourceStart: 0,
+          speed: 1.0,
+          volume: 0.9,
+          fadeIn: 0.5,
+          fadeOut: 0.5,
+          muted: false,
+          transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, flipH: false, flipV: false },
+          filters: { brightness: 0, contrast: 0, saturation: 0, temperature: 0, vignette: 0, blur: 0, sepia: 0, preset: 'none' },
+          transitionIn: { type: 'none', duration: 0 },
+        });
+      }
+    }
+
+    if (newAssets.length > 0) {
+      setMediaAssets((prev) => [...newAssets, ...prev]);
+    }
+
+    if (newClips.length > 0) {
+      const newTracks = tracks.map((track) => {
+        const matchingClips = newClips.filter((c) => c.trackId === track.id);
+        if (matchingClips.length > 0) {
+          return {
+            ...track,
+            clips: [...track.clips, ...matchingClips],
+          };
+        }
+        return track;
+      });
+      setSelectedClipId(newClips[0].id);
+      setSelectedClipIds([newClips[0].id]);
+      pushHistory(newTracks);
+    }
+
+    setCurrentView('editor');
+  };
+
+  // Instant Template Loader
+  const handleLoadTemplate = (templateKey: 'neon' | 'lofi' | 'vlog' | 'blank') => {
+    if (templateKey === 'blank') {
+      const blankTracks = tracks.map((t) => ({ ...t, clips: [] }));
+      setTracks(blankTracks);
+      setSelectedClipId(null);
+      setSelectedClipIds([]);
+      pushHistory(blankTracks);
+      setCurrentView('editor');
+      return;
+    }
+
+    if (templateKey === 'neon') {
+      setProjectSettings((prev) => ({ ...prev, aspectRatio: '9:16', title: 'Neon Night Reel' }));
+      const newTracks: Track[] = tracks.map((t) => {
+        if (t.type === 'video') {
+          return {
+            ...t,
+            clips: [
+              {
+                id: `clip-neon-${Date.now()}`,
+                trackId: t.id,
+                name: 'Cyberpunk Neon Street',
+                type: 'image' as const,
+                mediaAssetId: 'sample-video-1',
+                url: DEFAULT_SAMPLE_MEDIA[0]?.url,
+                start: 0,
+                duration: 6,
+                sourceStart: 0,
+                speed: 1.2,
+                volume: 1.0,
+                fadeIn: 0.3,
+                fadeOut: 0.3,
+                muted: false,
+                transform: { x: 0, y: 0, scale: 1.1, rotation: 0, opacity: 1, flipH: false, flipV: false },
+                filters: { brightness: 10, contrast: 25, saturation: 35, temperature: 10, vignette: 20, blur: 0, sepia: 0, preset: 'cyberpunk' },
+                smartCutout: { enabled: true, mode: 'ai_subject', keyColor: '#00FF00', tolerance: 40, softness: 20, feather: 2, strokeOutline: true, strokeColor: '#38bdf8', strokeWidth: 4 },
+                transitionIn: { type: 'flash', duration: 0.5 },
+              },
+            ],
+          };
+        }
+        if (t.type === 'audio') {
+          return {
+            ...t,
+            clips: [
+              {
+                id: `clip-audio-${Date.now()}`,
+                trackId: t.id,
+                name: 'Synthwave Velocity',
+                type: 'audio' as const,
+                mediaAssetId: 'audio-synthwave',
+                start: 0,
+                duration: 6,
+                sourceStart: 0,
+                speed: 1.0,
+                volume: 0.85,
+                fadeIn: 0.2,
+                fadeOut: 0.5,
+                muted: false,
+                transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, flipH: false, flipV: false },
+                filters: { brightness: 0, contrast: 0, saturation: 0, temperature: 0, vignette: 0, blur: 0, sepia: 0, preset: 'none' },
+                transitionIn: { type: 'none', duration: 0 },
+              },
+            ],
+          };
+        }
+        return t;
+      });
+      setSelectedClipId(newTracks[0].clips[0]?.id || null);
+      setSelectedClipIds([newTracks[0].clips[0]?.id || '']);
+      pushHistory(newTracks);
+      setCurrentView('editor');
+      return;
+    }
+
+    if (templateKey === 'lofi') {
+      setProjectSettings((prev) => ({ ...prev, aspectRatio: '16:9', title: 'Sunset Lofi Chill' }));
+      const newTracks: Track[] = tracks.map((t) => {
+        if (t.type === 'video') {
+          return {
+            ...t,
+            clips: [
+              {
+                id: `clip-lofi-${Date.now()}`,
+                trackId: t.id,
+                name: 'Alpine Mountain Lake',
+                type: 'image' as const,
+                mediaAssetId: 'sample-video-2',
+                url: DEFAULT_SAMPLE_MEDIA[1]?.url,
+                start: 0,
+                duration: 8,
+                sourceStart: 0,
+                speed: 0.9,
+                volume: 1.0,
+                fadeIn: 0.4,
+                fadeOut: 0.4,
+                muted: false,
+                transform: { x: 0, y: 0, scale: 1.05, rotation: 0, opacity: 1, flipH: false, flipV: false },
+                filters: { brightness: -5, contrast: 15, saturation: 10, temperature: 20, vignette: 30, blur: 0, sepia: 15, preset: 'golden' },
+                transitionIn: { type: 'crossfade', duration: 0.6 },
+              },
+            ],
+          };
+        }
+        if (t.type === 'audio') {
+          return {
+            ...t,
+            clips: [
+              {
+                id: `clip-audio-${Date.now()}`,
+                trackId: t.id,
+                name: 'Lofi Midnight Rain',
+                type: 'audio' as const,
+                mediaAssetId: 'audio-lofi-beats',
+                start: 0,
+                duration: 8,
+                sourceStart: 0,
+                speed: 1.0,
+                volume: 0.9,
+                fadeIn: 0.5,
+                fadeOut: 0.5,
+                muted: false,
+                transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, flipH: false, flipV: false },
+                filters: { brightness: 0, contrast: 0, saturation: 0, temperature: 0, vignette: 0, blur: 0, sepia: 0, preset: 'none' },
+                transitionIn: { type: 'none', duration: 0 },
+              },
+            ],
+          };
+        }
+        return t;
+      });
+      setSelectedClipId(newTracks[0].clips[0]?.id || null);
+      setSelectedClipIds([newTracks[0].clips[0]?.id || '']);
+      pushHistory(newTracks);
+      setCurrentView('editor');
+      return;
+    }
+
+    if (templateKey === 'vlog') {
+      setProjectSettings((prev) => ({ ...prev, aspectRatio: '9:16', title: 'Retro Film Vlog' }));
+      const newTracks: Track[] = tracks.map((t) => {
+        if (t.type === 'video') {
+          return {
+            ...t,
+            clips: [
+              {
+                id: `clip-vlog-${Date.now()}`,
+                trackId: t.id,
+                name: 'Retro Film Portrait',
+                type: 'image' as const,
+                mediaAssetId: 'sample-image-1',
+                url: DEFAULT_SAMPLE_MEDIA[2]?.url,
+                start: 0,
+                duration: 6,
+                sourceStart: 0,
+                speed: 1.0,
+                volume: 1.0,
+                fadeIn: 0.3,
+                fadeOut: 0.3,
+                muted: false,
+                transform: { x: 0, y: 0, scale: 1.0, rotation: 0, opacity: 1, flipH: false, flipV: false },
+                filters: { brightness: -10, contrast: 30, saturation: -20, temperature: 15, vignette: 40, blur: 0, sepia: 25, preset: 'vintage' },
+                transitionIn: { type: 'glitch', duration: 0.4 },
+              },
+            ],
+          };
+        }
+        if (t.type === 'text') {
+          return {
+            ...t,
+            clips: [
+              {
+                id: `clip-text-${Date.now()}`,
+                trackId: t.id,
+                name: 'Film Vlog Subtitle',
+                type: 'text' as const,
+                start: 0.5,
+                duration: 4,
+                sourceStart: 0,
+                speed: 1.0,
+                volume: 1.0,
+                fadeIn: 0.2,
+                fadeOut: 0.2,
+                muted: false,
+                textConfig: {
+                  text: 'MEMORIES IN 35MM',
+                  fontFamily: 'sans-serif',
+                  fontSize: 36,
+                  fontWeight: '700',
+                  color: '#ffffff',
+                  strokeColor: '#f59e0b',
+                  strokeWidth: 2,
+                  backgroundColor: 'rgba(0,0,0,0.6)',
+                  backgroundPadding: 8,
+                  borderRadius: 6,
+                  shadowColor: 'rgba(0,0,0,0.5)',
+                  shadowBlur: 8,
+                  letterSpacing: 1,
+                  animation: 'bounce',
+                },
+                transform: { x: 0, y: 220, scale: 1, rotation: 0, opacity: 1, flipH: false, flipV: false },
+                filters: { brightness: 0, contrast: 0, saturation: 0, temperature: 0, vignette: 0, blur: 0, sepia: 0, preset: 'none' },
+                transitionIn: { type: 'none', duration: 0 },
+              },
+            ],
+          };
+        }
+        return t;
+      });
+      setSelectedClipId(newTracks[0].clips[0]?.id || null);
+      setSelectedClipIds([newTracks[0].clips[0]?.id || '']);
+      pushHistory(newTracks);
+      setCurrentView('editor');
+      return;
+    }
+  };
+
   // Snapshot frame export
   const handleTakeSnapshot = () => {
     exportEngine.exportSnapshot(
@@ -702,84 +1058,143 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#070a0f] text-slate-100 font-sans select-none">
-      {/* Top Bar Header */}
-      <TopBar
-        projectSettings={projectSettings}
-        onUpdateSettings={(newSettings) =>
-          setProjectSettings((prev) => ({ ...prev, ...newSettings }))
-        }
-        onOpenExport={() => setIsExportModalOpen(true)}
-        onTakeSnapshot={handleTakeSnapshot}
-        onOpenShortcuts={() => setIsShortcutsOpen(true)}
-        onOpenAutoCaptions={() => setIsAutoCaptionsOpen(true)}
-        canUndo={historyIndex > 0}
-        canRedo={historyIndex < history.length - 1}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
-      />
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#070a0f] text-slate-100 font-sans select-none relative">
+      {/* 1. Cinematic Splash & Loading Screen */}
+      {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
 
-      {/* Middle Workstation Layout: Media Sidebar + Monitor Viewport + Inspector */}
-      <div className="flex-1 flex min-h-0 relative overflow-hidden">
-        {/* Media Assets & Presets Sidebar */}
-        <MediaLibrary
-          mediaAssets={mediaAssets}
-          onAddMediaAsset={(asset) => setMediaAssets((prev) => [asset, ...prev])}
-          onAddClipToTimeline={handleAddClipToTimeline}
-          onApplyFilterToSelected={handleApplyFilterToSelected}
-          onApplyTransitionToSelected={handleApplyTransitionToSelected}
-          onOpenAutoCaptions={() => setIsAutoCaptionsOpen(true)}
-        />
-
-        {/* Real-time Canvas Monitor */}
-        <PlayerMonitor
-          tracks={tracks}
+      {/* 2. Direct Upload Screen (Clean Mobile-First Project Home) */}
+      {!showSplash && currentView === 'home' && (
+        <DirectUploadHome
           projectSettings={projectSettings}
-          currentTime={currentTime}
-          isPlaying={isPlaying}
-          selectedClipId={selectedClipId}
-          onSeek={handleSeek}
-          onTogglePlay={handleTogglePlay}
-          onStepFrame={handleStepFrame}
-          onJumpStart={handleJumpStart}
-          onJumpEnd={handleJumpEnd}
-          onSelectClip={(clipId) => handleSelectClip(clipId, false)}
-          onUpdateClipTransform={handleUpdateClipTransform}
+          tracks={tracks}
+          onUpdateSettings={(newSettings) =>
+            setProjectSettings((prev) => ({ ...prev, ...newSettings }))
+          }
+          onEnterStudio={() => setCurrentView('editor')}
+          onUploadFiles={handleUploadFilesFromHome}
+          onLoadTemplate={handleLoadTemplate}
+          onOpenAutoCaptions={() => setIsAutoCaptionsOpen(true)}
+          onOpenStockMusic={() => setCurrentView('editor')}
         />
+      )}
 
-        {/* Right Inspector Panel */}
-        <Inspector
-          selectedClip={selectedClipObj}
-          currentTime={currentTime}
-          onSeek={handleSeek}
-          onUpdateClip={handleUpdateClip}
-          onDeleteClip={handleDeleteClip}
-          onDuplicateClip={handleDuplicateClip}
-          onSplitClipAtPlayhead={handleSplitClipAtPlayhead}
-        />
-      </div>
+      {/* 3. Editor View: Responsive Mobile-First or Desktop Studio */}
+      {!showSplash && currentView === 'editor' && (
+        <>
+          {layoutMode === 'mobile' ? (
+            <MobileEditorView
+              tracks={tracks}
+              projectSettings={projectSettings}
+              currentTime={currentTime}
+              isPlaying={isPlaying}
+              selectedClipId={selectedClipId}
+              selectedClipIds={selectedClipIds}
+              canUndo={historyIndex > 0}
+              canRedo={historyIndex < history.length - 1}
+              onSeek={handleSeek}
+              onTogglePlay={handleTogglePlay}
+              onStepFrame={handleStepFrame}
+              onJumpStart={handleJumpStart}
+              onJumpEnd={handleJumpEnd}
+              onSelectClip={handleSelectClip}
+              onUpdateClip={handleUpdateClip}
+              onDeleteClip={handleDeleteClip}
+              onDuplicateClip={handleDuplicateClip}
+              onSplitClipAtPlayhead={handleSplitClipAtPlayhead}
+              onUndo={handleUndo}
+              onRedo={handleRedo}
+              onOpenExport={() => setIsExportModalOpen(true)}
+              onOpenAutoCaptions={() => setIsAutoCaptionsOpen(true)}
+              onNavigateHome={() => setCurrentView('home')}
+              onUpdateSettings={(newSettings) =>
+                setProjectSettings((prev) => ({ ...prev, ...newSettings }))
+              }
+            />
+          ) : (
+            <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
+              {/* Desktop Top Bar Header */}
+              <TopBar
+                projectSettings={projectSettings}
+                onUpdateSettings={(newSettings) =>
+                  setProjectSettings((prev) => ({ ...prev, ...newSettings }))
+                }
+                onOpenExport={() => setIsExportModalOpen(true)}
+                onTakeSnapshot={handleTakeSnapshot}
+                onOpenShortcuts={() => setIsShortcutsOpen(true)}
+                onOpenAutoCaptions={() => setIsAutoCaptionsOpen(true)}
+                canUndo={historyIndex > 0}
+                canRedo={historyIndex < history.length - 1}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
+                onNavigateHome={() => setCurrentView('home')}
+                layoutMode={layoutMode}
+                onToggleLayoutMode={() =>
+                  setLayoutMode((prev) => (prev === 'mobile' ? 'desktop' : 'mobile'))
+                }
+              />
 
-      {/* Bottom Multi-Track Timeline */}
-      <Timeline
-        tracks={tracks}
-        projectSettings={projectSettings}
-        currentTime={currentTime}
-        selectedClipId={selectedClipId}
-        selectedClipIds={selectedClipIds}
-        onSeek={handleSeek}
-        onSelectClip={handleSelectClip}
-        onUpdateClip={handleUpdateClip}
-        onUpdateClipsBatch={handleUpdateClipsBatch}
-        onDeleteClip={handleDeleteClip}
-        onDeleteSelectedClips={handleDeleteSelectedClips}
-        onDuplicateClip={handleDuplicateClip}
-        onDuplicateSelectedClips={handleDuplicateSelectedClips}
-        onCommitHistory={handleCommitHistory}
-        onSplitClipAtPlayhead={handleSplitClipAtPlayhead}
-        onToggleTrackMute={handleToggleTrackMute}
-        onToggleTrackLock={handleToggleTrackLock}
-        onToggleTrackVisible={handleToggleTrackVisible}
-      />
+              {/* Desktop Middle Workstation: Media Sidebar + Monitor Viewport + Inspector */}
+              <div className="flex-1 flex min-h-0 relative overflow-hidden">
+                <MediaLibrary
+                  mediaAssets={mediaAssets}
+                  onAddMediaAsset={(asset) => setMediaAssets((prev) => [asset, ...prev])}
+                  onAddClipToTimeline={handleAddClipToTimeline}
+                  onApplyFilterToSelected={handleApplyFilterToSelected}
+                  onApplyTransitionToSelected={handleApplyTransitionToSelected}
+                  onOpenAutoCaptions={() => setIsAutoCaptionsOpen(true)}
+                />
+
+                <PlayerMonitor
+                  tracks={tracks}
+                  projectSettings={projectSettings}
+                  currentTime={currentTime}
+                  isPlaying={isPlaying}
+                  selectedClipId={selectedClipId}
+                  onSeek={handleSeek}
+                  onTogglePlay={handleTogglePlay}
+                  onStepFrame={handleStepFrame}
+                  onJumpStart={handleJumpStart}
+                  onJumpEnd={handleJumpEnd}
+                  onSelectClip={(clipId) => handleSelectClip(clipId, false)}
+                  onUpdateClipTransform={handleUpdateClipTransform}
+                />
+
+                <Inspector
+                  selectedClip={selectedClipObj}
+                  currentTime={currentTime}
+                  onSeek={handleSeek}
+                  onUpdateClip={handleUpdateClip}
+                  onDeleteClip={handleDeleteClip}
+                  onDuplicateClip={handleDuplicateClip}
+                  onSplitClipAtPlayhead={handleSplitClipAtPlayhead}
+                />
+              </div>
+
+              {/* Desktop Bottom Multi-Track Timeline */}
+              <Timeline
+                tracks={tracks}
+                projectSettings={projectSettings}
+                currentTime={currentTime}
+                selectedClipId={selectedClipId}
+                selectedClipIds={selectedClipIds}
+                onSeek={handleSeek}
+                onSelectClip={handleSelectClip}
+                onUpdateClip={handleUpdateClip}
+                onUpdateClipsBatch={handleUpdateClipsBatch}
+                onDeleteClip={handleDeleteClip}
+                onDeleteSelectedClips={handleDeleteSelectedClips}
+                onDuplicateClip={handleDuplicateClip}
+                onDuplicateSelectedClips={handleDuplicateSelectedClips}
+                onCommitHistory={handleCommitHistory}
+                onSplitClipAtPlayhead={handleSplitClipAtPlayhead}
+                onToggleTrackMute={handleToggleTrackMute}
+                onToggleTrackLock={handleToggleTrackLock}
+                onToggleTrackVisible={handleToggleTrackVisible}
+              />
+            </div>
+          )}
+        </>
+      )}
 
       {/* Export Dialog */}
       <ExportModal

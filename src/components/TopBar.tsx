@@ -9,6 +9,9 @@ import {
   Keyboard,
   Maximize2,
   Sparkles,
+  Home,
+  Smartphone,
+  Monitor,
 } from 'lucide-react';
 import { AspectRatio, ProjectSettings } from '../types/editor';
 
@@ -24,6 +27,9 @@ interface TopBarProps {
   onUndo?: () => void;
   onRedo?: () => void;
   onToggleFullscreen?: () => void;
+  onNavigateHome?: () => void;
+  layoutMode?: 'desktop' | 'mobile';
+  onToggleLayoutMode?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -38,6 +44,9 @@ export const TopBar: React.FC<TopBarProps> = ({
   onUndo,
   onRedo,
   onToggleFullscreen,
+  onNavigateHome,
+  layoutMode = 'desktop',
+  onToggleLayoutMode,
 }) => {
   const aspectRatios: { label: string; value: AspectRatio; desc: string }[] = [
     { label: '16:9', value: '16:9', desc: 'YouTube / Landscape' },
@@ -59,13 +68,24 @@ export const TopBar: React.FC<TopBarProps> = ({
           </span>
         </div>
 
+        {onNavigateHome && (
+          <button
+            onClick={onNavigateHome}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#141923] hover:bg-[#1e2637] border border-[#222c3d] text-slate-300 hover:text-white text-xs font-medium transition-colors"
+            title="Go to Direct Upload / New Project"
+          >
+            <Home className="w-3.5 h-3.5 text-sky-400" />
+            <span className="hidden sm:inline">Home / Upload</span>
+          </button>
+        )}
+
         <div className="h-4 w-px bg-[#263147] mx-1" />
 
         <input
           type="text"
           value={projectSettings.title}
           onChange={(e) => onUpdateSettings({ title: e.target.value })}
-          className="bg-transparent hover:bg-[#161c27] focus:bg-[#161c27] px-2.5 py-1 rounded text-xs font-medium text-slate-200 border border-transparent focus:border-sky-500/50 outline-none w-44 transition-colors"
+          className="bg-transparent hover:bg-[#161c27] focus:bg-[#161c27] px-2.5 py-1 rounded text-xs font-medium text-slate-200 border border-transparent focus:border-sky-500/50 outline-none w-36 sm:w-44 transition-colors truncate"
           placeholder="Project Title"
         />
       </div>
@@ -156,21 +176,41 @@ export const TopBar: React.FC<TopBarProps> = ({
           </button>
         )}
 
+        {onToggleLayoutMode && (
+          <button
+            onClick={onToggleLayoutMode}
+            title={layoutMode === 'mobile' ? 'Switch to Desktop Studio' : 'Switch to Mobile View'}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#141923] border border-[#222c3d] text-slate-300 hover:text-white hover:bg-[#1e2636] text-xs font-medium transition-colors"
+          >
+            {layoutMode === 'mobile' ? (
+              <>
+                <Monitor className="w-3.5 h-3.5 text-sky-400" />
+                <span className="hidden xl:inline">Studio</span>
+              </>
+            ) : (
+              <>
+                <Smartphone className="w-3.5 h-3.5 text-sky-400" />
+                <span className="hidden xl:inline">Mobile</span>
+              </>
+            )}
+          </button>
+        )}
+
         <button
           onClick={onTakeSnapshot}
           title="Download snapshot of current frame (PNG)"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#141923] border border-[#222c3d] text-slate-300 hover:text-white hover:bg-[#1e2636] text-xs font-medium transition-colors"
         >
           <Camera className="w-3.5 h-3.5 text-sky-400" />
-          <span>Snapshot</span>
+          <span className="hidden sm:inline">Snapshot</span>
         </button>
 
         <button
           onClick={onOpenExport}
-          className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-semibold text-xs shadow-md shadow-sky-500/20 transition-all active:scale-[0.98]"
+          className="flex items-center gap-2 px-3.5 sm:px-4 py-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-semibold text-xs shadow-md shadow-sky-500/20 transition-all active:scale-[0.98]"
         >
           <Download className="w-3.5 h-3.5" />
-          <span>Export Video</span>
+          <span>Export</span>
         </button>
       </div>
     </header>
