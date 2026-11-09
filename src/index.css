@@ -1,0 +1,42 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+  
+  .font-mono,
+  .tabular-nums {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Custom sleek dark scrollbar for timeline and panels */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f131a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #28303f;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3b4559;
+}
+
+/* Timeline playhead glow */
+.playhead-needle {
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.7);
+}
+
+/* Range input styling */
+input[type="range"] {
+  accent-color: #38bdf8;
+}

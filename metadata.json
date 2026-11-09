@@ -1,0 +1,6 @@
+{
+  "name": "CineCut Studio - Pro Video & Photo Editor",
+  "description": "Feature-rich CapCut-style video and photo editor with multi-track timeline, color grading, audio fading, animated text, sticker overlays, and high-resolution export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
